@@ -4,35 +4,30 @@
 // cramming it into a single evening.
 export const TASK_TYPES = {
   quick: {
-    label: 'Quick Exercise',
     emoji: '✏️',
     defaultMinutes: 30,
     spread: false,
     dailyCap: null,
   },
   reading: {
-    label: 'Reading / Notes',
     emoji: '📖',
     defaultMinutes: 45,
     spread: false,
     dailyCap: null,
   },
   essay: {
-    label: 'Essay / Report',
     emoji: '📝',
     defaultMinutes: 120,
     spread: true,
     dailyCap: 90,
   },
   project: {
-    label: 'Group Project',
     emoji: '👥',
     defaultMinutes: 180,
     spread: true,
     dailyCap: 90,
   },
   exam: {
-    label: 'Exam Prep',
     emoji: '🎯',
     defaultMinutes: 240,
     spread: true,
@@ -42,49 +37,36 @@ export const TASK_TYPES = {
 
 export const TYPE_KEYS = Object.keys(TASK_TYPES);
 
-export const IMPORTANCE_LEVELS = [
-  { value: 1, label: 'Minor', hint: 'Ungraded / practice' },
-  { value: 2, label: 'Low', hint: 'Small part of the grade' },
-  { value: 3, label: 'Normal', hint: 'Regular graded work' },
-  { value: 4, label: 'High', hint: 'Big assignment or quiz' },
-  { value: 5, label: 'Critical', hint: 'Major exam or final project' },
-];
+// Labels/hints live in the translation files (importance.1 … importance.5).
+export const IMPORTANCE_LEVELS = [1, 2, 3, 4, 5];
 
 export const PRIORITY_LEVELS = {
   overdue: {
-    label: 'Overdue',
     chip: 'bg-rose-600 text-white',
     bar: 'bg-rose-600',
     ring: 'ring-rose-200',
   },
   critical: {
-    label: 'Do now',
     chip: 'bg-rose-100 text-rose-700',
     bar: 'bg-rose-500',
     ring: 'ring-rose-100',
   },
   high: {
-    label: 'High',
     chip: 'bg-amber-100 text-amber-800',
     bar: 'bg-amber-500',
     ring: 'ring-amber-100',
   },
   medium: {
-    label: 'Medium',
     chip: 'bg-sky-100 text-sky-700',
     bar: 'bg-sky-500',
     ring: 'ring-sky-100',
   },
   low: {
-    label: 'Low',
     chip: 'bg-slate-100 text-slate-600',
     bar: 'bg-slate-400',
     ring: 'ring-slate-100',
   },
 };
-
-// Weekday index follows Date#getDay(): 0 = Sunday.
-export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export const DEFAULT_SETTINGS = {
   // Free study minutes available on each weekday (Sun..Sat).
@@ -99,6 +81,9 @@ export const DEFAULT_SETTINGS = {
   // How many days ahead the planner looks.
   planDays: 7,
 };
+
+// Free plan: max number of open (not done) tasks. Trial/Pro: unlimited.
+export const FREE_TASK_LIMIT = 5;
 
 export const STORAGE_KEYS = {
   tasks: 'shp.tasks.v1',

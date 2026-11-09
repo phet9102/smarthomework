@@ -1,55 +1,143 @@
 # Smart Homework & Study Prioritizer
 
-A mobile-first web app for high school students: add homework, see **what to do first**, how long it will take, and a daily study plan that respects your free time, so you avoid last-minute cramming and burnout.
+เว็บแอปจัดลำดับการบ้านสำหรับนักเรียนมัธยม: บอกว่างานไหนต้องทำก่อน ใช้เวลาเท่าไร และวางแผนอ่านหนังสือรายวันโดยไม่เกินเวลาว่าง (กันหมดไฟ)
+ภาษาไทยเป็นหลัก รองรับภาษาอังกฤษ และเพิ่มภาษาอื่นได้ มีทดลองใช้ฟรี 14 วัน และสมาชิก Pro รายเดือนจ่ายผ่าน PromptPay
 
-Built with **React + Vite + Tailwind CSS**. All data stays in the browser (LocalStorage), so there is no backend or database to set up.
+**Stack:** React + Vite + Tailwind CSS · Cloudflare Pages + Pages Functions + D1
 
-## Features
+---
 
-- **Quick entry:** subject, title, type (Quick Exercise, Reading, Essay, Group Project, Exam Prep), due date with one-tap shortcuts, importance (1–5), time estimate with type-based presets.
-- **Do This First:** a single hero card with the highest-priority task and the reason it ranks first, plus the next two in line.
-- **Smart priority score (0–100):** deadline urgency, importance, and how much of your remaining free time the task needs.
-- **Daily plan:** today's work turned into focus blocks with breaks (Pomodoro-style), starting at your usual study time.
-- **Week view:** big tasks and exam prep are split into smaller daily sessions (spaced practice).
-- **Burnout guard:** a per-day maximum the planner never exceeds, a workload meter, and early "not enough time" warnings.
-- **Progress tracking:** 25/50/75% quick buttons, done/undo, weekly completion bar.
-- **Your data:** saved automatically, synced between tabs, export/import JSON backup.
+## ฟีเจอร์
 
-## How the priority score works
+| | ฟรี (ไม่ต้องสมัคร) | ทดลอง 14 วัน / Pro |
+|---|---|---|
+| จัดลำดับอัจฉริยะ "ทำอันนี้ก่อน" + แผนวันนี้ | ✓ | ✓ |
+| จำนวนงานค้าง | สูงสุด 5 | ไม่จำกัด |
+| แผนรายสัปดาห์ | – | ✓ |
+| ซิงก์ข้ามเครื่อง (คลาวด์) | – | ✓ |
+
+- งานทั้งหมดเก็บในเบราว์เซอร์ (LocalStorage) ส่งออก/นำเข้าไฟล์สำรองได้ทุกแพ็กเกจ
+- สมัครด้วยอีเมล + รหัสผ่าน แล้วเริ่มทดลอง Pro ทันที ไม่ต้องผูกบัตร
+- จ่ายรายเดือน (หรือ 3/6/12 เดือน) ผ่าน QR PromptPay ล็อกยอด
+
+### หน้าเว็บ (URL)
+
+| URL | หน้า |
+|---|---|
+| `/` | แอปหลัก |
+| `/subscription` | เลือกแพ็กเกจ: ฟรี · ทดลอง 14 วัน · Pro |
+| `/trial/<token>` | ยืนยันเริ่มทดลองใช้ (สมัคร/ล็อกอินในหน้านี้ได้) ลิงก์ใช้ได้ 30 นาที ครั้งเดียว |
+| `/pay/<token>` | หน้า QR PromptPay ของรายการนั้น QR ใช้ได้ 10 นาที |
+| `/receipt/<token>` | สถานะ/ใบเสร็จหลังกด "ฉันโอนแล้ว" อัปเดตเองเมื่อแอดมินอนุมัติ |
+
+`<token>` คือรหัสสุ่ม 43 ตัวแบบ base64url (A–Z a–z 0–9 - _) เช่น `9yag-5OA38mcaqScXB9g5ZZFaNGllYncnCt8b_l8CE` เดาไม่ได้ และเปิดได้เฉพาะเจ้าของบัญชี
+สิทธิ์ทดลองใช้ได้ 1 ครั้งต่อบัญชี และเริ่มเมื่อกดยืนยันในหน้า `/trial/...` เท่านั้น (สมัครเฉยๆ ยังไม่เริ่มนับ)
+
+### ระบบชำระเงินทำงานอย่างไร
+
+PromptPay ส่วนตัว (เช่น K PLUS) **ไม่มี API ให้เว็บตรวจเงินเข้าอัตโนมัติ** และตัดเงินรายเดือนอัตโนมัติไม่ได้ ระบบจึงทำงานแบบนี้
+
+1. ผู้ใช้กดชำระที่ `/subscription` แล้วไปหน้า `/pay/<token>` ซึ่งมี QR ที่ **ล็อกยอดแบบมีเศษสตางค์ไม่ซ้ำกัน** เช่น 49.63 บาท QR ใช้ได้ 10 นาที ถ้าโอนทันแต่กดแจ้งไม่ทัน ยังกด "ฉันโอนแล้ว" ได้อีก 30 นาที และยอดเศษสตางค์นั้นจะถูกกันไว้ 2 ชม. ไม่ให้ซ้ำกับรายการใหม่ของคนอื่น
+2. ผู้ใช้สแกนด้วยแอปธนาคาร (หรือกด "บันทึกรูป QR" แล้วเปิดจากรูปในแอป) โอน แล้วกด **"ฉันโอนแล้ว"** ระบบพาไปหน้า `/receipt/<token>`
+3. คุณเห็นแจ้งเตือนเงินเข้า 49.63 ใน K PLUS แล้วกดอนุมัติในหน้า **แอดมิน**
+4. Pro ต่ออายุ 30 วันต่อเดือนที่จ่าย นับต่อจากวันที่สิทธิ์เดิมหมด (ไม่เสียวันทดลอง/วันที่จ่ายไว้)
+5. ใกล้หมดอายุ แอปจะแสดงแบนเนอร์ให้ต่ออายุ
+
+---
+
+## ตั้งค่าบน Cloudflare (ทำผ่าน Dashboard ทั้งหมด)
+
+> ต้องเชื่อมโปรเจกต์กับ GitHub (Connect to Git) เท่านั้น การอัปโหลดไฟล์ตรงจะไม่ build และไม่รันโฟลเดอร์ `functions/`
+
+### 1) Build settings
+Workers & Pages → โปรเจกต์ → Settings → Build
+
+| ช่อง | ค่า |
+|---|---|
+| Framework preset | React (Vite) |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Environment variable | `NODE_VERSION` = `20` |
+
+### 2) สร้างฐานข้อมูล D1
+1. **Storage & databases → D1 SQL database → Create** ตั้งชื่อ `smarthomework-db`
+2. เปิดฐานข้อมูล → แท็บ **Console** → คัดลอกเนื้อหาไฟล์ `schema.sql` ทั้งหมดไปวาง → **Execute**
+
+> ถ้าเคยรัน `schema.sql` เวอร์ชันก่อน (v1.1) ไปแล้ว และยังไม่มีผู้ใช้จริง ให้รันคำสั่งนี้ใน Console ก่อน แล้วรัน `schema.sql` ใหม่
+> `DROP TABLE IF EXISTS sync_data; DROP TABLE IF EXISTS payments; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS rate_limits; DROP TABLE IF EXISTS users;`
+
+### 3) ผูกฐานข้อมูลกับเว็บ
+โปรเจกต์ Pages → **Settings → Bindings → Add → D1 database**
+- Variable name: **`DB`** (ตัวพิมพ์ใหญ่)
+- D1 database: `smarthomework-db`
+
+### 4) ตัวแปรระบบ
+โปรเจกต์ Pages → **Settings → Variables and secrets → Add**
+
+| ชื่อ | ตัวอย่าง | หมายเหตุ |
+|---|---|---|
+| `PROMPTPAY_ID` | `0812345678` | เบอร์ที่ผูก PromptPay กับ K PLUS (หรือเลขบัตรประชาชน 13 หลัก) เลือกชนิด **Secret** |
+| `PROMPTPAY_NAME` | `วิชัย ก.` | ชื่อที่ผู้โอนเห็น ควรตรงกับชื่อในแอปธนาคารให้ผู้ใช้มั่นใจ |
+| `ADMIN_EMAILS` | `you@gmail.com` | อีเมลที่มีสิทธิ์อนุมัติ ถ้ามีหลายอีเมลให้คั่นด้วย `,` |
+| `PRICE_THB` | `49` | ราคาต่อเดือน |
+| `TRIAL_DAYS` | `14` | วันทดลองใช้ |
+| `PAY_QR_MINUTES` | `10` | อายุ QR (นาที) ไม่ใส่ = 10 |
+
+### 5) Deploy ใหม่
+Deployments → Retry deployment (binding และตัวแปรจะมีผลกับ deployment ใหม่เท่านั้น)
+
+### 6) ตรวจสอบ
+- เปิด `https://<โปรเจกต์>.pages.dev/api/health` ต้องได้ `{"ok":true,"db":true,"billing":true}`
+- สมัครสมาชิกด้วยอีเมลที่ใส่ใน `ADMIN_EMAILS` → กดปุ่มแพ็กเกจมุมขวาบน → **แอดมิน: ตรวจการโอน**
+- ทดลองซื้อด้วยบัญชีทดสอบ โอนจริง 49.xx บาทเข้าบัญชีตัวเอง แล้วอนุมัติ
+
+---
+
+## เพิ่มภาษาใหม่
+
+1. คัดลอก `src/i18n/locales/en.js` เป็นไฟล์ใหม่ เช่น `ja.js` แล้วแปลข้อความ
+2. ใน `src/i18n/index.jsx` เพิ่ม `import ja from './locales/ja.js'` และบรรทัด `ja: { name: '日本語', locale: 'ja-JP', dict: ja }`
+
+คีย์ที่ยังไม่ได้แปลจะแสดงภาษาไทยแทนอัตโนมัติ ระบบเลือกภาษาไทยให้ถ้าเบราว์เซอร์มีภาษาไทย ผู้ใช้เปลี่ยนภาษาเองได้ในหน้าตั้งค่า
+
+## สูตรจัดลำดับความสำคัญ
 
 ```
-Urgency    U = 100 · e^(−hoursLeft / 48)                 (due now ≈ 100, 1 day ≈ 61, 4 days ≈ 14)
-Importance I = (importance − 1) / 4 · 100
-Pressure   P = min(remainingMinutes / freeMinutesUntilDue, 1) · 100
-
-score = 0.45·U + 0.30·I + 0.25·P
+Urgency    U = 100 · e^(−ชั่วโมงที่เหลือ / 48)
+Importance I = (ความสำคัญ − 1) / 4 · 100
+Pressure   P = min(เวลาที่ต้องใช้ ÷ เวลาว่างก่อนกำหนดส่ง, 1) · 100
+score = 0.45·U + 0.30·I + 0.25·P      (งานที่เลยกำหนดอยู่บนสุดเสมอ)
 ```
 
-Overdue tasks are pinned to the top. A task that needs more time than you have free before its deadline is flagged **Tight**.
+ตัวจัดตารางใช้ Earliest-Deadline-First งานใหญ่และการเตรียมสอบถูกแบ่งทำหลายวัน (วันละไม่เกิน 60–90 นาที) และไม่จัดเกินเวลาว่างหรือขีดจำกัดต่อวัน ดูโค้ดที่ `src/lib/priority.js` และ `src/lib/scheduler.js`
 
-The scheduler fills days in Earliest-Deadline-First order. Essays, projects and exam prep are spread evenly across the available days (max 60–90 min/day for each), quick tasks are done as early as possible, and no day exceeds its free time or the burnout limit. See `src/lib/priority.js` and `src/lib/scheduler.js`.
-
-## Run locally
+## รันในเครื่อง
 
 ```bash
 npm install
-npm run dev       # http://localhost:5173
-npm run build     # production build in dist/
+npm run dev
 ```
 
-Requires Node.js 18+ (20 recommended, see `.nvmrc`).
+`npm run dev` ไม่มี API (ไม่มี D1) แอปจึงปลดล็อกทุกฟีเจอร์ในโหมดพัฒนาให้ทำ UI ได้ เวอร์ชันที่ build จริงจะไม่มีการปลดล็อกนี้
 
-## Project structure
+## โครงสร้าง
 
 ```
-src/
-  main.jsx, App.jsx, index.css
-  lib/        constants, time helpers, priority engine, scheduler, storage/validation
-  hooks/      useLocalStorage, useNow
-  components/ DoThisFirst, TodayPlan, WeekPlan, TaskList, TaskCard, TaskForm, SettingsPanel, Sheet, Toast, EmptyState, Icons
+functions/api/[[path]].js   Pages Function → ส่งทุก /api/* ไปที่ server/api.js
+server/api.js               บัญชี, trial, ชำระเงิน, แอดมิน, ซิงก์
+server/promptpay.js         สร้าง payload QR PromptPay (EMVCo + CRC16)
+server/security.js          PBKDF2 hash รหัสผ่าน, session token
+schema.sql                  ตาราง D1
+src/i18n/                   ระบบหลายภาษา + locales/th.js, en.js
+src/account/                สถานะบัญชีและแพ็กเกจ (React context)
+src/lib/                    priority, scheduler, storage, time, api
+src/pages/                  หน้า /subscription, /trial, /pay, /receipt
+src/lib/router.jsx          router ขนาดเล็ก (History API)
+src/components/             UI (Account, Admin, AuthForm, QrCode, PlanBanner, ...)
 ```
 
-## Deploy
+## ข้อควรรู้
 
-Cloudflare Pages via GitHub (dashboard only):
-Framework preset **React (Vite)** · Build command `npm run build` · Output directory `dist`.
+- **ขีดจำกัดของโหมดฟรีตรวจฝั่งเบราว์เซอร์** (เพราะงานเก็บในเครื่องผู้ใช้) คนที่รู้เทคนิคเลี่ยงได้ ส่วนการซิงก์คลาวด์ตรวจฝั่งเซิร์ฟเวอร์จริง ถ้าต้องการกั้นเข้มขึ้นให้ย้ายฟีเจอร์ไปทำงานฝั่งเซิร์ฟเวอร์
+- ความปลอดภัย: รหัสผ่าน hash ด้วย PBKDF2-SHA256 (100,000 รอบ), session เป็น HttpOnly cookie, กัน CSRF ด้วยการตรวจ Origin + JSON, จำกัดการลองล็อกอิน 10 ครั้ง / 15 นาที
+- เมื่อเริ่มรับเงินจริง ควรมีหน้านโยบายความเป็นส่วนตัว (PDPA) เพราะเก็บอีเมลผู้ใช้ ผู้ใช้ส่วนใหญ่เป็นนักเรียน การชำระเงินจึงมักผ่านผู้ปกครอง

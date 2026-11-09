@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Sheet from './Sheet.jsx';
 import { IMPORTANCE_LEVELS, TASK_TYPES, TYPE_KEYS } from '../lib/constants.js';
-import { addDays, formatDuration, startOfDay, toInputDateTime } from '../lib/time.js';
+import { addDays, startOfDay, toInputDateTime } from '../lib/time.js';
+import { useI18n } from '../i18n/index.jsx';
 
 const ESTIMATE_PRESETS = [15, 30, 45, 60, 90, 120, 180, 240];
 
@@ -27,6 +28,7 @@ function emptyDraft() {
 
 /** Quick add / edit form. `task` = existing task when editing. */
 export default function TaskForm({ open, task, subjects, onSave, onClose }) {
+  const { t, fmt } = useI18n();
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState('');
 
@@ -54,10 +56,10 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
       return toInputDateTime(d);
     };
     return [
-      { label: 'Tonight', value: mk(0, 22) },
-      { label: 'Tomorrow', value: mk(1, 8) },
-      { label: 'In 3 days', value: mk(3, 8) },
-      { label: 'Next week', value: mk(7, 8) },
+      { label: 'form.tonight', value: mk(0, 22) },
+      { label: 'form.tomorrow', value: mk(1, 8) },
+      { label: 'form.in3', value: mk(3, 8) },
+      { label: 'form.nextWeek', value: mk(7, 8) },
     ];
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -72,12 +74,12 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
     e.preventDefault();
     const title = draft.title.trim();
     const subject = draft.subject.trim();
-    if (!subject) return setError('Add a subject, e.g. "Math".');
-    if (!title) return setError('Give the task a short title.');
+    if (!subject) return setError(t('form.errSubject'));
+    if (!title) return setError(t('form.errTitle'));
     const due = new Date(draft.due);
-    if (Number.isNaN(due.getTime())) return setError('Pick a valid due date.');
+    if (Number.isNaN(due.getTime())) return setError(t('form.errDue'));
     const estimate = Math.round(Number(draft.estimate));
-    if (!Number.isFinite(estimate) || estimate < 5) return setError('Estimate must be at least 5 minutes.');
+    if (!Number.isFinite(estimate) || estimate < 5) return setError(t('form.errEstimate'));
 
     onSave({
       ...(task || {}),
@@ -95,15 +97,15 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
   return (
     <Sheet
       open={open}
-      title={task ? 'Edit task' : 'New homework'}
+      title={task ? t('form.editTitle') : t('form.newTitle')}
       onClose={onClose}
       footer={
         <div className="flex gap-2">
           <button type="button" className="btn-ghost flex-1" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="submit" form="task-form" className="btn-primary flex-[2]">
-            {task ? 'Save changes' : 'Add task'}
+            {task ? t('form.saveChanges') : t('form.add')}
           </button>
         </div>
       }
@@ -111,12 +113,12 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
       <form id="task-form" onSubmit={submit} className="space-y-5">
         <div className="grid grid-cols-5 gap-3">
           <div className="col-span-2">
-            <label className="field-label" htmlFor="subject">Subject</label>
+            <label className="field-label" htmlFor="subject">{t('form.subject')}</label>
             <input
               id="subject"
               className="field"
               list="subject-list"
-              placeholder="Math"
+              placeholder={t('form.subjectPh')}
               autoComplete="off"
               value={draft.subject}
               onChange={(e) => set({ subject: e.target.value })}
@@ -129,11 +131,11 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
             </datalist>
           </div>
           <div className="col-span-3">
-            <label className="field-label" htmlFor="title">Task</label>
+            <label className="field-label" htmlFor="title">{t('form.task')}</label>
             <input
               id="title"
               className="field"
-              placeholder="Exercise 4.3"
+              placeholder={t('form.taskPh')}
               value={draft.title}
               onChange={(e) => set({ title: e.target.value })}
               maxLength={120}
@@ -142,10 +144,10 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
         </div>
 
         <fieldset>
-          <legend className="field-label">Type</legend>
+          <legend className="field-label">{t('form.type')}</legend>
           <div className="flex flex-wrap gap-2">
             {TYPE_KEYS.map((key) => {
-              const t = TASK_TYPES[key];
+              const typeInfo = TASK_TYPES[key];
               const active = draft.type === key;
               return (
                 <button
@@ -159,8 +161,8 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
                       : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  <span className="mr-1">{t.emoji}</span>
-                  {t.label}
+                  <span className="mr-1">{typeInfo.emoji}</span>
+                  {t(`types.${key}`)}
                 </button>
               );
             })}
@@ -168,7 +170,7 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
         </fieldset>
 
         <div>
-          <label className="field-label" htmlFor="due">Due</label>
+          <label className="field-label" htmlFor="due">{t('form.due')}</label>
           <input
             id="due"
             type="datetime-local"
@@ -186,7 +188,7 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
                   draft.due === q.value ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {q.label}
+                {t(q.label)}
               </button>
             ))}
           </div>
@@ -194,25 +196,23 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
 
         <fieldset>
           <legend className="field-label">
-            Importance{' '}
-            <span className="font-normal text-slate-400">
-              · {IMPORTANCE_LEVELS[draft.importance - 1]?.hint}
-            </span>
+            {t('form.importance')}{' '}
+            <span className="font-normal text-slate-400">· {t(`importance.${draft.importance}.hint`)}</span>
           </legend>
           <div className="grid grid-cols-5 gap-1.5">
             {IMPORTANCE_LEVELS.map((lvl) => {
-              const active = Number(draft.importance) === lvl.value;
+              const active = Number(draft.importance) === lvl;
               return (
                 <button
                   type="button"
-                  key={lvl.value}
-                  onClick={() => set({ importance: lvl.value })}
+                  key={lvl}
+                  onClick={() => set({ importance: lvl })}
                   aria-pressed={active}
                   className={`rounded-xl py-2 text-xs font-semibold ring-1 transition ${
                     active ? 'bg-indigo-600 text-white ring-indigo-600' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  {lvl.label}
+                  {t(`importance.${lvl}.label`)}
                 </button>
               );
             })}
@@ -221,8 +221,8 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
 
         <div>
           <div className="flex items-baseline justify-between">
-            <label className="field-label" htmlFor="estimate">Estimated time</label>
-            <span className="text-sm font-semibold text-indigo-600">{formatDuration(draft.estimate || 0)}</span>
+            <label className="field-label" htmlFor="estimate">{t('form.estimate')}</label>
+            <span className="text-sm font-semibold text-indigo-600">{fmt.duration(draft.estimate || 0)}</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {ESTIMATE_PRESETS.map((m) => (
@@ -234,7 +234,7 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
                   Number(draft.estimate) === m ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {formatDuration(m)}
+                {fmt.duration(m)}
               </button>
             ))}
             <input
@@ -243,22 +243,22 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
               min={5}
               step={5}
               inputMode="numeric"
-              aria-label="Estimated minutes"
+              aria-label={t('form.estimateMinutes')}
               className="field w-24 py-1 text-sm"
               value={draft.estimate}
               onChange={(e) => set({ estimate: e.target.value, estimateTouched: true })}
             />
           </div>
           <p className="mt-1.5 text-xs text-slate-500">
-            Default for {TASK_TYPES[draft.type].label}: {formatDuration(TASK_TYPES[draft.type].defaultMinutes)}.
-            {TASK_TYPES[draft.type].spread && ' Will be split across several days.'}
+            {t('form.estimateHint', { type: t(`types.${draft.type}`), time: fmt.duration(TASK_TYPES[draft.type].defaultMinutes) })}
+            {TASK_TYPES[draft.type].spread && t('form.spreadHint')}
           </p>
         </div>
 
         {task && (
           <div>
             <div className="flex items-baseline justify-between">
-              <label className="field-label" htmlFor="progress">Progress</label>
+              <label className="field-label" htmlFor="progress">{t('form.progress')}</label>
               <span className="text-sm font-semibold text-slate-700">{draft.progress}%</span>
             </div>
             <input
@@ -276,13 +276,13 @@ export default function TaskForm({ open, task, subjects, onSave, onClose }) {
 
         <div>
           <label className="field-label" htmlFor="notes">
-            Notes <span className="font-normal text-slate-400">(optional)</span>
+            {t('form.notes')} <span className="font-normal text-slate-400">{t('common.optional')}</span>
           </label>
           <textarea
             id="notes"
             rows={2}
             className="field resize-none"
-            placeholder="Pages, group members, teacher tips…"
+            placeholder={t('form.notesPh')}
             value={draft.notes}
             onChange={(e) => set({ notes: e.target.value })}
             maxLength={500}

@@ -1,26 +1,30 @@
 import { PRIORITY_LEVELS, TASK_TYPES } from '../lib/constants.js';
-import { explainPriority } from '../lib/priority.js';
-import { formatDue, formatDuration } from '../lib/time.js';
+import { priorityReason } from '../lib/priority.js';
+import { useI18n } from '../i18n/index.jsx';
 import { AlertIcon, CheckIcon, ClockIcon, EditIcon, TrashIcon } from './Icons.jsx';
 
 export function ProgressBar({ value, className = 'bg-indigo-500' }) {
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}>
+    <div
+      className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
+      role="progressbar"
+      aria-valuenow={value}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
       <div className={`h-full rounded-full transition-all duration-300 ${className}`} style={{ width: `${value}%` }} />
     </div>
   );
 }
 
 export function PriorityChip({ level }) {
-  const p = PRIORITY_LEVELS[level];
-  return <span className={`chip ${p.chip}`}>{p.label}</span>;
+  const { t } = useI18n();
+  return <span className={`chip ${PRIORITY_LEVELS[level].chip}`}>{t(`priority.${level}`)}</span>;
 }
 
-/**
- * A single open task. `compact` hides secondary actions (used in lists),
- * `showReason` adds the one-line "why it's ranked here" explanation.
- */
+/** A single task with done toggle, progress shortcuts, edit and delete. */
 export default function TaskCard({ task, now, onToggleDone, onProgress, onEdit, onDelete, showReason = false }) {
+  const { t, fmt } = useI18n();
   const type = TASK_TYPES[task.type] ?? TASK_TYPES.quick;
   const meta = task.meta;
   const level = PRIORITY_LEVELS[meta?.level ?? 'low'];
@@ -32,7 +36,7 @@ export default function TaskCard({ task, now, onToggleDone, onProgress, onEdit, 
         <button
           type="button"
           onClick={() => onToggleDone(task.id)}
-          aria-label={task.done ? 'Mark as not done' : 'Mark as done'}
+          aria-label={task.done ? t('card.markUndone') : t('card.markDone')}
           className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition ${
             task.done
               ? 'border-emerald-500 bg-emerald-500 text-white'
@@ -47,28 +51,28 @@ export default function TaskCard({ task, now, onToggleDone, onProgress, onEdit, 
             <span className="text-xs font-semibold uppercase tracking-wide text-indigo-600">{task.subject}</span>
             <span className="text-xs text-slate-400">·</span>
             <span className="text-xs text-slate-500">
-              {type.emoji} {type.label}
+              {type.emoji} {t(`types.${task.type}`)}
             </span>
             {!task.done && meta && <PriorityChip level={meta.level} />}
             {!task.done && meta?.atRisk && (
               <span className="chip bg-rose-50 text-rose-700">
-                <AlertIcon width={12} height={12} /> Tight
+                <AlertIcon width={12} height={12} /> {t('card.tight')}
               </span>
             )}
           </div>
           <h3 className={`break-words font-semibold leading-snug ${task.done ? 'line-through' : ''}`}>{task.title}</h3>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
-            <span className={meta?.overdue ? 'font-semibold text-rose-600' : ''}>{formatDue(task.due, now)}</span>
+            <span className={meta?.overdue ? 'font-semibold text-rose-600' : ''}>{fmt.due(task.due, now)}</span>
             {!task.done && meta && (
               <span className="inline-flex items-center gap-1">
                 <ClockIcon width={14} height={14} />
-                {formatDuration(meta.remaining)} left
+                {t('card.left', { time: fmt.duration(meta.remaining) })}
               </span>
             )}
           </div>
 
-          {showReason && meta && !task.done && <p className="mt-1.5 text-sm text-slate-600">{explainPriority(meta)}</p>}
+          {showReason && meta && !task.done && <p className="mt-1.5 text-sm text-slate-600">{t(priorityReason(meta))}</p>}
           {task.notes && <p className="mt-1.5 line-clamp-2 text-sm text-slate-500">{task.notes}</p>}
 
           {!task.done && (
@@ -91,20 +95,27 @@ export default function TaskCard({ task, now, onToggleDone, onProgress, onEdit, 
                     className={`rounded-lg px-2 py-1 text-xs font-medium transition ${
                       task.progress >= p ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-100'
                     }`}
-                    aria-label={`Set progress to ${p}%`}
+                    aria-label={t('card.setProgress', { n: p })}
                   >
                     {p}%
                   </button>
                 ))}
               </div>
             ) : (
-              <span className="text-xs text-emerald-600">Done{task.doneAt ? ` · ${new Date(task.doneAt).toLocaleDateString()}` : ''}</span>
+              <span className="text-xs text-emerald-600">
+                {task.doneAt ? t('card.doneOn', { date: fmt.date(task.doneAt, { day: 'numeric', month: 'short' }) }) : t('card.done')}
+              </span>
             )}
             <div className="flex">
-              <button type="button" className="icon-btn" onClick={() => onEdit(task)} aria-label="Edit task">
+              <button type="button" className="icon-btn" onClick={() => onEdit(task)} aria-label={t('card.edit')}>
                 <EditIcon width={18} height={18} />
               </button>
-              <button type="button" className="icon-btn hover:text-rose-600" onClick={() => onDelete(task.id)} aria-label="Delete task">
+              <button
+                type="button"
+                className="icon-btn hover:text-rose-600"
+                onClick={() => onDelete(task.id)}
+                aria-label={t('card.delete')}
+              >
                 <TrashIcon width={18} height={18} />
               </button>
             </div>

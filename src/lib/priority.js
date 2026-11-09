@@ -116,15 +116,15 @@ export function rankTasks(tasks, settings, now = new Date()) {
     );
 }
 
-/** One short, human reason why a task ranks where it does. */
-export function explainPriority(meta) {
-  if (meta.overdue) return 'Past the deadline. Finish or talk to your teacher.';
-  if (meta.atRisk) return 'Needs more time than you have free before it is due.';
+/** Translation key (reason.*) for one short, human reason why a task ranks where it does. */
+export function priorityReason(meta) {
+  if (meta.overdue) return 'reason.overdue';
+  if (meta.atRisk) return 'reason.atRisk';
   const { urgency, importance, pressure } = meta.parts;
   const top = Math.max(urgency, importance, pressure);
-  if (top === urgency && urgency >= 50) return 'Deadline is very close.';
-  if (top === pressure && pressure >= 40) return 'Big job: it uses a lot of your free time before the deadline.';
-  if (top === importance && importance >= 75) return 'Counts a lot toward your grade.';
-  if (meta.hoursLeft > 24 * 5) return 'Plenty of time. Start early, finish relaxed.';
-  return 'Steady priority. Chip away at it.';
+  if (top === urgency && urgency >= 50) return 'reason.urgency';
+  if (top === pressure && pressure >= 40) return 'reason.pressure';
+  if (top === importance && importance >= 75) return 'reason.importance';
+  if (meta.hoursLeft > 24 * 5) return 'reason.early';
+  return 'reason.steady';
 }

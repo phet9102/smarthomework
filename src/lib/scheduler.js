@@ -174,12 +174,12 @@ export function buildTimeBlocks(day, settings, now = new Date()) {
   return blocks;
 }
 
-/** Overall workload status for the burnout meter. */
+/** Overall workload status for the burnout meter. `key` maps to workload.* translations. */
 export function workloadStatus(day) {
-  if (!day || day.capacity === 0) return { ratio: 0, label: 'Rest day', tone: 'slate' };
+  if (!day || day.capacity === 0) return { ratio: 0, key: 'rest', tone: 'slate' };
   const ratio = day.used / day.capacity;
-  if (ratio >= 0.95) return { ratio, label: 'Full day: protect your sleep', tone: 'rose' };
-  if (ratio >= 0.7) return { ratio, label: 'Busy but doable', tone: 'amber' };
-  if (ratio > 0) return { ratio, label: 'Balanced', tone: 'emerald' };
-  return { ratio, label: 'Free time!', tone: 'emerald' };
+  if (ratio >= 0.95) return { ratio, key: 'full', tone: 'rose' };
+  if (ratio >= 0.7) return { ratio, key: 'busy', tone: 'amber' };
+  if (ratio > 0) return { ratio, key: 'balanced', tone: 'emerald' };
+  return { ratio, key: 'free', tone: 'emerald' };
 }

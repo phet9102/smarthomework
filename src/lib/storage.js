@@ -54,18 +54,19 @@ export function reviveSettings(data) {
   };
 }
 
-/** A realistic example week so new users can see how the app works. */
-export function sampleTasks(now = new Date()) {
+/** A realistic example week so new users can see how the app works. `t` localizes titles. */
+export function sampleTasks(now = new Date(), t = (k) => k) {
   const at = (days, h, m = 0) => {
     const d = addDays(startOfDay(now), days);
     d.setHours(h, m, 0, 0);
     return d.toISOString();
   };
+  const s = (key) => ({ subject: t(`sample.${key}.subject`), title: t(`sample.${key}.title`) });
   return [
-    { subject: 'Math', title: 'Exercise 4.3 (Q1–20)', type: 'quick', due: at(1, 8, 30), importance: 3, estimate: 40 },
-    { subject: 'English', title: 'Persuasive essay draft', type: 'essay', due: at(4, 23, 59), importance: 4, estimate: 150 },
-    { subject: 'Physics', title: 'Midterm: Forces & Motion', type: 'exam', due: at(6, 9, 0), importance: 5, estimate: 300, progress: 10 },
-    { subject: 'Biology', title: 'Cell model group project', type: 'project', due: at(9, 8, 30), importance: 4, estimate: 240 },
-    { subject: 'History', title: 'Read chapter 7 + notes', type: 'reading', due: at(2, 8, 30), importance: 2, estimate: 45 },
-  ].map((t) => sanitizeTask({ ...t, id: newId(), createdAt: new Date(now).toISOString() }));
+    { ...s('math'), type: 'quick', due: at(1, 8, 30), importance: 3, estimate: 40 },
+    { ...s('english'), type: 'essay', due: at(4, 23, 59), importance: 4, estimate: 150 },
+    { ...s('physics'), type: 'exam', due: at(6, 9, 0), importance: 5, estimate: 300, progress: 10 },
+    { ...s('biology'), type: 'project', due: at(9, 8, 30), importance: 4, estimate: 240 },
+    { ...s('history'), type: 'reading', due: at(2, 8, 30), importance: 2, estimate: 45 },
+  ].map((task) => sanitizeTask({ ...task, id: newId(), createdAt: new Date(now).toISOString() }));
 }

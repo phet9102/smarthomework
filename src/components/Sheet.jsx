@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
+import { useI18n } from '../i18n/index.jsx';
 import { XIcon } from './Icons.jsx';
 
 /** Bottom sheet on mobile, centered dialog on larger screens. */
-export default function Sheet({ open, title, onClose, children, footer }) {
+export default function Sheet({ open, title, onClose, children, footer, autoFocus = true }) {
+  const { t } = useI18n();
   const panelRef = useRef(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -13,16 +15,16 @@ export default function Sheet({ open, title, onClose, children, footer }) {
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    // Focus the first input for fast keyboard entry.
-    const t = window.setTimeout(() => {
-      panelRef.current?.querySelector('input, select, textarea, button')?.focus();
+    // Focus the first field for fast keyboard entry.
+    const timer = window.setTimeout(() => {
+      if (autoFocus) panelRef.current?.querySelector('input, select, textarea')?.focus();
     }, 50);
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
-      window.clearTimeout(t);
+      window.clearTimeout(timer);
     };
-  }, [open]);
+  }, [open, autoFocus]);
 
   if (!open) return null;
 
@@ -35,7 +37,7 @@ export default function Sheet({ open, title, onClose, children, footer }) {
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-lg font-bold">{title}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label={t('common.close')}>
             <XIcon />
           </button>
         </div>
