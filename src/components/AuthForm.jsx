@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { errorKey } from '../lib/api.js';
 import { useI18n } from '../i18n/index.jsx';
 import { useAccount } from '../account/AccountProvider.jsx';
+import { Link } from '../lib/router.jsx';
 
 const RESEND_COOLDOWN_S = 60;
 
@@ -65,8 +66,9 @@ export function CheckEmail({ email, next, onChangeEmail }) {
  *    (If the server has email confirmation off, sign-up logs in and calls `onDone(data, 'register')`.)
  *  - Log-in calls `onDone(data, 'login')`.
  *  - `next` is where the verify link sends the user afterwards (e.g. /trial/<token>).
+ *  - `showTabs={false}` hides the sign-up/log-in switch (the /login and /signup pages link to each other instead).
  */
-export default function AuthForm({ initialMode = 'register', onDone, submitLabel, next }) {
+export default function AuthForm({ initialMode = 'register', onDone, submitLabel, next, showTabs = true }) {
   const { t, lang } = useI18n();
   const account = useAccount();
   const [mode, setMode] = useState(initialMode);
@@ -91,7 +93,7 @@ export default function AuthForm({ initialMode = 'register', onDone, submitLabel
         await onDone?.(data, 'login');
       }
     } catch (err) {
-      setError({ text: t(errorKey(err)), unverified: err.code === 'email_not_verified' });
+      setError({ text: t(errorKey(err)), unverified: err.code === 'email_not_verified', taken: err.code === 'email_taken' });
     } finally {
       setBusy(false);
     }
@@ -116,6 +118,7 @@ export default function AuthForm({ initialMode = 'register', onDone, submitLabel
 
   return (
     <form onSubmit={submit} className="space-y-3">
+      {showTabs && (
       <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
         {['register', 'login'].map((m) => (
           <button
@@ -131,6 +134,7 @@ export default function AuthForm({ initialMode = 'register', onDone, submitLabel
           </button>
         ))}
       </div>
+      )}
       {mode === 'register' && (
         <div>
           <label className="field-label" htmlFor="auth-name">
@@ -168,6 +172,11 @@ export default function AuthForm({ initialMode = 'register', onDone, submitLabel
             >
               {t('verify.resendShort')}
             </button>
+          )}
+          {error.taken && !showTabs && (
+            <Link to="/login" className="mt-2 block font-bold underline">
+              {t('auth.goToLogin')}
+            </Link>
           )}
         </div>
       )}

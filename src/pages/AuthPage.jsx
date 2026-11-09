@@ -55,12 +55,21 @@ export default function AuthPage({ mode = 'login' }) {
 
           <div className="card p-5">
             <AuthForm
+              key={mode}
               initialMode={mode === 'signup' ? 'register' : 'login'}
+              showTabs={false}
               onDone={() => navigate('/', { replace: true })}
             />
           </div>
 
-          <p className="mt-4 text-center text-sm text-slate-500">
+          <p className="mt-4 text-center text-sm text-slate-600">
+            {mode === 'signup' ? t('auth.haveAccount') : t('auth.noAccount')}{' '}
+            <Link to={mode === 'signup' ? '/login' : '/signup'} className="font-semibold text-indigo-600 hover:underline">
+              {mode === 'signup' ? t('auth.login') : t('auth.register')}
+            </Link>
+          </p>
+
+          <p className="mt-3 text-center text-sm text-slate-500">
             <Link to="/subscription" className="font-semibold text-indigo-600 hover:underline">{t('sub.seePlans')}</Link>
             <span className="mx-2 text-slate-300">·</span>
             <Link to="/privacy" className="hover:underline">{t('pages.privacy')}</Link>

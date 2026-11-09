@@ -250,6 +250,7 @@ export default {
     password: 'Password',
     passwordHint: 'At least 8 characters',
     haveAccount: 'Already have an account?',
+    goToLogin: 'Go to log in',
     noAccount: "Don't have an account?",
     registerCta: 'Sign up & start {n}-day free trial',
     registerBtn: 'Sign up',

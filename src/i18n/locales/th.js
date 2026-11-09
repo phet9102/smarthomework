@@ -250,6 +250,7 @@ export default {
     password: 'รหัสผ่าน',
     passwordHint: 'อย่างน้อย 8 ตัวอักษร',
     haveAccount: 'มีบัญชีแล้ว?',
+    goToLogin: 'ไปหน้าเข้าสู่ระบบ',
     noAccount: 'ยังไม่มีบัญชี?',
     registerCta: 'สมัครและเริ่มทดลองฟรี {n} วัน',
     registerBtn: 'สมัครสมาชิก',
