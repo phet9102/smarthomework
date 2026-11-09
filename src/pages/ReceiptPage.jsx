@@ -55,7 +55,7 @@ export default function ReceiptPage({ token }) {
         <section className="card p-5">
           <h1 className="mb-1 text-lg font-bold">{t('payPage.loginTitle')}</h1>
           <p className="mb-4 text-sm text-slate-500">{t('receipt.loginDesc')}</p>
-          <AuthForm initialMode="login" />
+          <AuthForm initialMode="login" next={`/receipt/${token}`} />
         </section>
       </PageShell>
     );

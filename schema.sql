@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   lang          TEXT NOT NULL DEFAULT 'th',
   trial_ends_at INTEGER,          -- NULL = has not used the free trial yet
   paid_until    INTEGER,
+  email_verified_at INTEGER,       -- NULL = has not clicked the /verify/<token> email link yet
   created_at    INTEGER NOT NULL
 );
 
@@ -21,6 +22,18 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+-- One-time email links: /verify/<token> (purpose 'verify')
+CREATE TABLE IF NOT EXISTS email_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose    TEXT NOT NULL,
+  next_path  TEXT,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id);
 
 -- One-time links for starting the free trial: /trial/<token>
 CREATE TABLE IF NOT EXISTS trial_links (

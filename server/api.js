@@ -9,12 +9,21 @@
  *   PRICE_THB       Monthly price, default 49
  *   TRIAL_DAYS      Free-trial length for new accounts, default 14
  *   PAY_QR_MINUTES  How long a payment QR stays valid, default 10
+ *   GMAIL_USER, GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN
+ *                   Send confirmation emails from a Gmail bot account (see server/email.js)
+ *   RESEND_API_KEY  …or Resend, once you own a domain (Secret)
+ *   EMAIL_FROM      Sender, e.g. "Smart Homework <no-reply@kanokchan.dev>"
+ *   APP_URL         Optional site URL for links in emails, e.g. https://smarthomework.pages.dev
+ *   REQUIRE_EMAIL_VERIFICATION  'false' to skip the email step even when Resend is set up.
+ *                   Without RESEND_API_KEY + EMAIL_FROM, verification is skipped automatically
+ *                   (sign-up logs in right away), so the site works before you own a domain.
  *
  * Personal PromptPay accounts have no API that reports incoming money, so every
  * checkout gets a unique amount (price + 1–99 satang). The admin matches that exact
  * amount against the K PLUS incoming-transfer notification and approves it.
  */
 import { promptPayPayload, isValidPromptPayId, maskPromptPayId } from './promptpay.js';
+import { emailConfigured, sendEmail, verificationEmail } from './email.js';
 import { hashPassword, randomHex, randomId, randomToken, sha256Hex, verifyPassword } from './security.js';
 
 const MS_DAY = 24 * 60 * 60 * 1000;
@@ -26,7 +35,8 @@ const COOKIE = 'shp_session';
 // with someone else's new checkout.
 const NOTIFY_GRACE_MS = 30 * 60 * 1000;
 const AMOUNT_HOLD_MS = 2 * 60 * 60 * 1000;
-const TRIAL_LINK_MS = 30 * 60 * 1000; // a /trial/<token> link is valid for 30 minutes
+const TRIAL_LINK_MS = MS_DAY; // a /trial/<token> link is valid for 24 hours (room to confirm the email first)
+const VERIFY_TTL_MS = MS_DAY; // a /verify/<token> email link is valid for 24 hours
 const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/;
 const PERIOD_DAYS = 30; // one "month" of Pro
 const MAX_BODY_BYTES = 600 * 1024;
@@ -67,6 +77,11 @@ function getConfig(env) {
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean),
   };
+}
+
+/** Email confirmation is on only when sending is set up and not switched off. */
+function verificationRequired(env) {
+  return emailConfigured(env) && String(env.REQUIRE_EMAIL_VERIFICATION || '').toLowerCase() !== 'false';
 }
 
 function billingConfigured(cfg) {
@@ -169,7 +184,7 @@ async function currentUser(request, env) {
   const tokenHash = await sha256Hex(token);
   return env.DB.prepare(
     `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = ? AND s.expires_at > ?`,
+     WHERE s.token_hash = ? AND s.expires_at > ? AND u.email_verified_at IS NOT NULL`,
   )
     .bind(tokenHash, Date.now())
     .first();
@@ -236,32 +251,111 @@ async function meBody(env, user, cfg) {
 
 // ---------- handlers ----------
 
+/** Only same-site paths we know are allowed as a post-verification redirect. */
+function safeNext(value) {
+  const v = String(value || '');
+  return /^\/(subscription|trial\/[\w-]+|pay\/[\w-]+|receipt\/[\w-]+)?$/.test(v) ? v || '/' : '/';
+}
+
+function appOrigin(request, env) {
+  return (env.APP_URL || new URL(request.url).origin).replace(/\/+$/, '');
+}
+
+/** Creates a one-time /verify/<token> link and emails it. */
+async function sendVerification(request, env, user, next) {
+  const token = randomToken();
+  const now = Date.now();
+  await env.DB.prepare(
+    "INSERT INTO email_tokens (token_hash, user_id, purpose, next_path, created_at, expires_at) VALUES (?, ?, 'verify', ?, ?, ?)",
+  )
+    .bind(await sha256Hex(token), user.id, safeNext(next), now, now + VERIFY_TTL_MS)
+    .run();
+  const link = `${appOrigin(request, env)}/verify/${token}`;
+  const message = verificationEmail({ lang: user.lang, name: user.name, link, hours: VERIFY_TTL_MS / 3600000 });
+  const sent = await sendEmail(env, { to: user.email, ...message });
+  if (!sent) throw new HttpError(502, 'email_send_failed');
+}
+
 async function register(request, env, cfg) {
   const body = await readJson(request);
   const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
   if (!EMAIL_RE.test(email) || email.length > 200) throw new HttpError(400, 'invalid_email');
   if (password.length < 8 || password.length > 200) throw new HttpError(400, 'weak_password');
+  const mustVerify = verificationRequired(env);
   await rateLimit(env, `register:${clientIp(request)}`, 10, 60 * 60 * 1000);
 
-  const exists = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
-  if (exists) throw new HttpError(409, 'email_taken');
-
-  const now = Date.now();
   const name = String(body.name || '').trim().slice(0, 40) || email.split('@')[0].slice(0, 40);
   const lang = /^[a-z]{2,3}$/.test(body.lang || '') ? body.lang : 'th';
   const { hash, salt } = await hashPassword(password);
-  const id = randomId('u_');
-  await env.DB.prepare(
-    `INSERT INTO users (id, email, name, pass_hash, pass_salt, lang, trial_ends_at, paid_until, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
-  )
-    .bind(id, email, name, hash, salt, lang, now)
+  const existing = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
+
+  let user;
+  if (existing?.email_verified_at) {
+    throw new HttpError(409, 'email_taken');
+  } else if (existing) {
+    // Nobody has proven they own this email yet, so the newest sign-up wins.
+    await env.DB.prepare('UPDATE users SET name = ?, pass_hash = ?, pass_salt = ?, lang = ? WHERE id = ?')
+      .bind(name, hash, salt, lang, existing.id)
+      .run();
+    user = { ...existing, name, lang };
+  } else {
+    const id = randomId('u_');
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, name, pass_hash, pass_salt, lang, trial_ends_at, paid_until, email_verified_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?)`,
+    )
+      .bind(id, email, name, hash, salt, lang, Date.now())
+      .run();
+    user = { id, email, name, lang };
+  }
+
+  if (!mustVerify) {
+    // No email step: confirm immediately and log in.
+    await env.DB.prepare('UPDATE users SET email_verified_at = ? WHERE id = ?').bind(Date.now(), user.id).run();
+    const fresh = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(user.id).first();
+    const cookie = await createSession(env, user.id);
+    return json({ ...(await meBody(env, fresh, cfg)), next: safeNext(body.next) }, 201, { 'set-cookie': cookie });
+  }
+
+  await sendVerification(request, env, user, body.next);
+  return json({ pendingVerification: true, email }, 202);
+}
+
+async function resendVerification(request, env) {
+  const body = await readJson(request);
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) throw new HttpError(400, 'invalid_email');
+  if (!verificationRequired(env)) throw new HttpError(503, 'email_not_configured');
+  await rateLimit(env, `resend-ip:${clientIp(request)}`, 10, 60 * 60 * 1000);
+  await rateLimit(env, `resend:${email}`, 3, 60 * 60 * 1000);
+  const user = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
+  // Same answer whether or not the account exists, so emails cannot be probed.
+  if (user && !user.email_verified_at) await sendVerification(request, env, user, body.next);
+  return json({ ok: true });
+}
+
+async function verifyEmail(request, env, cfg, token) {
+  if (!TOKEN_RE.test(token)) throw new HttpError(404, 'link_invalid');
+  const row = await env.DB.prepare("SELECT * FROM email_tokens WHERE token_hash = ? AND purpose = 'verify'")
+    .bind(await sha256Hex(token))
+    .first();
+  if (!row) throw new HttpError(404, 'link_invalid');
+  if (row.used_at) throw new HttpError(409, 'link_used');
+  const now = Date.now();
+  if (row.expires_at <= now) throw new HttpError(410, 'link_expired');
+
+  const claimed = await env.DB.prepare('UPDATE email_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL')
+    .bind(now, row.token_hash)
+    .run();
+  if (!claimed.meta?.changes) throw new HttpError(409, 'link_used');
+  await env.DB.prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?')
+    .bind(now, row.user_id)
     .run();
 
-  const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first();
-  const cookie = await createSession(env, id);
-  return json(await meBody(env, user, cfg), 201, { 'set-cookie': cookie });
+  const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(row.user_id).first();
+  const cookie = await createSession(env, user.id);
+  return json({ ...(await meBody(env, user, cfg)), next: row.next_path || '/' }, 200, { 'set-cookie': cookie });
 }
 
 async function login(request, env, cfg) {
@@ -277,6 +371,10 @@ async function login(request, env, cfg) {
     ? await verifyPassword(password, user.pass_salt, user.pass_hash)
     : (await hashPassword(password), false);
   if (!ok) throw new HttpError(401, 'invalid_credentials');
+  if (!user.email_verified_at) {
+    if (verificationRequired(env)) throw new HttpError(403, 'email_not_verified');
+    await env.DB.prepare('UPDATE users SET email_verified_at = ? WHERE id = ?').bind(Date.now(), user.id).run();
+  }
 
   await env.DB.prepare('DELETE FROM rate_limits WHERE key = ?').bind(limitKey).run();
   const cookie = await createSession(env, user.id);
@@ -305,8 +403,9 @@ async function updateMe(request, env, cfg) {
   return json(await meBody(env, { ...user, name, lang }, cfg));
 }
 
-function billingConfig(cfg) {
+function billingConfig(cfg, env) {
   return json({
+    emailVerification: verificationRequired(env),
     priceThb: cfg.priceThb,
     trialDays: cfg.trialDays,
     configured: billingConfigured(cfg),
@@ -558,9 +657,15 @@ export async function handleApi(request, env) {
 
   try {
     if (method === 'GET' && path === '/health') {
-      return json({ ok: true, db: Boolean(env.DB), billing: billingConfigured(cfg) });
+      return json({
+        ok: true,
+        db: Boolean(env.DB),
+        billing: billingConfigured(cfg),
+        email: emailConfigured(env),
+        emailVerification: verificationRequired(env),
+      });
     }
-    if (method === 'GET' && path === '/billing/config') return billingConfig(cfg);
+    if (method === 'GET' && path === '/billing/config') return billingConfig(cfg, env);
 
     if (!env.DB) throw new HttpError(503, 'db_not_configured');
 
@@ -577,6 +682,8 @@ export async function handleApi(request, env) {
       ['POST', /^\/auth\/register$/, () => register(request, env, cfg)],
       ['POST', /^\/auth\/login$/, () => login(request, env, cfg)],
       ['POST', /^\/auth\/logout$/, () => logout(request, env)],
+      ['POST', /^\/auth\/resend-verification$/, () => resendVerification(request, env)],
+      ['POST', /^\/auth\/verify\/([\w-]+)$/, (m) => verifyEmail(request, env, cfg, m[1])],
       ['GET', /^\/me$/, () => getMe(request, env, cfg)],
       ['PATCH', /^\/me$/, () => updateMe(request, env, cfg)],
       ['POST', /^\/billing\/checkout$/, () => checkout(request, env, cfg)],

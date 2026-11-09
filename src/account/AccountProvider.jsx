@@ -14,7 +14,7 @@ const POLL_MS = 30_000;
 export function AccountProvider({ children }) {
   const [status, setStatus] = useState('loading');
   const [me, setMe] = useState(null);
-  const [pricing, setPricing] = useState({ priceThb: 49, trialDays: 14, configured: false });
+  const [pricing, setPricing] = useState({ priceThb: 49, trialDays: 14, configured: false, emailVerification: false });
   const loadedOnce = useRef(false);
 
   const applyMe = useCallback((data) => {
@@ -65,9 +65,26 @@ export function AccountProvider({ children }) {
     [applyMe],
   );
 
+  // Sign-up does not log in: it emails a /verify/<token> link (returns { pendingVerification, email }).
+  // When email confirmation is off on the server, sign-up logs in right away (response has `user`).
   const register = useCallback(
     async (fields) => {
       const data = await api('/auth/register', { method: 'POST', body: fields });
+      if (data.user) applyMe(data);
+      return data;
+    },
+    [applyMe],
+  );
+
+  const resendVerification = useCallback(
+    (email, next) => api('/auth/resend-verification', { method: 'POST', body: { email, next } }),
+    [],
+  );
+
+  /** Clicking the email link: confirms the address and logs in. Returns { next } path. */
+  const verifyEmail = useCallback(
+    async (token) => {
+      const data = await api(`/auth/verify/${token}`, { method: 'POST' });
       applyMe(data);
       return data;
     },
@@ -98,10 +115,12 @@ export function AccountProvider({ children }) {
       refresh,
       login,
       register,
+      resendVerification,
+      verifyEmail,
       logout,
       setOpenPayment: (payment) => setMe((m) => (m ? { ...m, openPayment: payment } : m)),
     };
-  }, [status, me, pricing, refresh, login, register, logout]);
+  }, [status, me, pricing, refresh, login, register, resendVerification, verifyEmail, logout]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

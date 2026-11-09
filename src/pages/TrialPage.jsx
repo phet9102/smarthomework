@@ -104,7 +104,8 @@ export default function TrialPage({ token }) {
               <h2 className="mb-3 font-bold">{t('trialPage.authTitle')}</h2>
               <AuthForm
                 initialMode="register"
-                submitLabel={(mode) => (mode === 'register' ? t('trialPage.registerAndStart') : t('trialPage.loginAndStart'))}
+                next={`/trial/${token}`}
+                submitLabel={(mode) => (mode === 'register' ? t('auth.registerBtn') : t('trialPage.loginAndStart'))}
                 onDone={confirm}
               />
             </>

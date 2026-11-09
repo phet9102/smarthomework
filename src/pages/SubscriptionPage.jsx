@@ -179,7 +179,7 @@ export default function SubscriptionPage() {
         <section className="card mx-auto mt-6 max-w-md p-5">
           <h2 className="mb-1 font-bold">{t('sub.loginToPay')}</h2>
           <p className="mb-4 text-sm text-slate-500">{t('auth.localNote')}</p>
-          <AuthForm initialMode="login" onDone={() => checkout(true)} />
+          <AuthForm initialMode="login" next="/subscription" onDone={() => checkout(true)} />
         </section>
       )}
 

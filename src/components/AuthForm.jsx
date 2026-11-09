@@ -3,36 +3,103 @@ import { errorKey } from '../lib/api.js';
 import { useI18n } from '../i18n/index.jsx';
 import { useAccount } from '../account/AccountProvider.jsx';
 
+const RESEND_COOLDOWN_S = 60;
+
+/** "Check your inbox" panel with a resend button (60-second cooldown). */
+export function CheckEmail({ email, next, onChangeEmail }) {
+  const { t } = useI18n();
+  const account = useAccount();
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_S);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const id = window.setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [cooldown]);
+
+  const resend = async () => {
+    setMsg('');
+    try {
+      await account.resendVerification(email, next);
+      setMsg(t('verify.resent'));
+      setCooldown(RESEND_COOLDOWN_S);
+    } catch (err) {
+      setMsg(t(errorKey(err)));
+    }
+  };
+
+  return (
+    <div className="space-y-4 text-center">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-3xl" aria-hidden>
+        📧
+      </div>
+      <div>
+        <h2 className="text-lg font-bold">{t('verify.checkTitle')}</h2>
+        <p className="mt-2 text-sm text-slate-600">{t('verify.checkDesc')}</p>
+        <p className="mt-1 break-all font-semibold text-indigo-700">{email}</p>
+      </div>
+      <ol className="space-y-1 rounded-xl bg-slate-50 p-3 text-left text-sm text-slate-600">
+        <li>1. {t('verify.step1')}</li>
+        <li>2. {t('verify.step2')}</li>
+        <li>3. {t('verify.step3')}</li>
+      </ol>
+      <p className="text-xs text-slate-500">{t('verify.spamHint')}</p>
+      <button type="button" className="btn-soft w-full" disabled={cooldown > 0} onClick={resend}>
+        {cooldown > 0 ? t('verify.resendIn', { n: cooldown }) : t('verify.resend')}
+      </button>
+      {msg && <p className="text-sm font-medium text-indigo-700">{msg}</p>}
+      {onChangeEmail && (
+        <button type="button" className="btn-ghost w-full text-sm" onClick={onChangeEmail}>
+          {t('verify.useOtherEmail')}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /**
- * Sign-up / log-in form. `onDone(data, mode)` runs after success.
- * `submitLabel` lets a page change the button text (e.g. "Sign up & start trial").
+ * Sign-up / log-in form.
+ *  - Sign-up sends a confirmation email and shows <CheckEmail>; the user is logged in
+ *    only after clicking the /verify/<token> link.
+ *    (If the server has email confirmation off, sign-up logs in and calls `onDone(data, 'register')`.)
+ *  - Log-in calls `onDone(data, 'login')`.
+ *  - `next` is where the verify link sends the user afterwards (e.g. /trial/<token>).
  */
-export default function AuthForm({ initialMode = 'register', onDone, submitLabel }) {
+export default function AuthForm({ initialMode = 'register', onDone, submitLabel, next }) {
   const { t, lang } = useI18n();
   const account = useAccount();
   const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({ name: '', email: '', password: '' });
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null); // { text, unverified }
   const [busy, setBusy] = useState(false);
+  const [sentTo, setSentTo] = useState('');
 
   useEffect(() => setMode(initialMode), [initialMode]);
 
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
-    setError('');
+    setError(null);
     try {
-      const data =
-        mode === 'register'
-          ? await account.register({ ...form, lang })
-          : await account.login(form.email, form.password);
-      await onDone?.(data, mode);
+      if (mode === 'register') {
+        const data = await account.register({ ...form, lang, next });
+        if (data.pendingVerification) setSentTo(data.email);
+        else await onDone?.(data, 'register');
+      } else {
+        const data = await account.login(form.email, form.password);
+        await onDone?.(data, 'login');
+      }
     } catch (err) {
-      setError(t(errorKey(err)));
+      setError({ text: t(errorKey(err)), unverified: err.code === 'email_not_verified' });
     } finally {
       setBusy(false);
     }
   };
+
+  if (sentTo) {
+    return <CheckEmail email={sentTo} next={next} onChangeEmail={() => setSentTo('')} />;
+  }
 
   const input = (key, type, autoComplete, extra = {}) => (
     <input
@@ -54,7 +121,10 @@ export default function AuthForm({ initialMode = 'register', onDone, submitLabel
           <button
             type="button"
             key={m}
-            onClick={() => setMode(m)}
+            onClick={() => {
+              setMode(m);
+              setError(null);
+            }}
             className={`rounded-lg py-2 text-sm font-semibold ${mode === m ? 'bg-white shadow-sm' : 'text-slate-500'}`}
           >
             {t(`auth.${m}`)}
@@ -80,10 +150,33 @@ export default function AuthForm({ initialMode = 'register', onDone, submitLabel
         })}
         {mode === 'register' && <p className="mt-1 text-xs text-slate-500">{t('auth.passwordHint')}</p>}
       </div>
-      {error && <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</p>}
+      {error && (
+        <div role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+          {error.text}
+          {error.unverified && (
+            <button
+              type="button"
+              className="mt-2 block font-bold underline"
+              onClick={async () => {
+                try {
+                  await account.resendVerification(form.email, next);
+                  setSentTo(form.email.trim().toLowerCase());
+                } catch (err) {
+                  setError({ text: t(errorKey(err)) });
+                }
+              }}
+            >
+              {t('verify.resendShort')}
+            </button>
+          )}
+        </div>
+      )}
       <button type="submit" className="btn-primary w-full" disabled={busy}>
         {busy ? t('common.loading') : submitLabel ? submitLabel(mode) : t(mode === 'register' ? 'auth.registerBtn' : 'auth.login')}
       </button>
+      {mode === 'register' && account.pricing.emailVerification && (
+        <p className="text-center text-xs text-slate-500">{t('verify.willSend')}</p>
+      )}
     </form>
   );
 }

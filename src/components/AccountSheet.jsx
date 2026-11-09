@@ -205,6 +205,7 @@ export default function AccountSheet({ open, initialMode = 'register', onClose, 
                 await account.logout();
                 onToast(t('auth.loggedOut'));
                 onClose();
+                navigate('/login', { replace: true });
               }}
             >
               {t('auth.logout')}

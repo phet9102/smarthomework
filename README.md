@@ -24,9 +24,11 @@
 
 | URL | หน้า |
 |---|---|
-| `/` | แอปหลัก |
+| `/login`, `/signup` | เข้าสู่ระบบ / สมัครสมาชิก (ต้องทำก่อนใช้ `/`) |
+| `/verify/<token>` | ลิงก์ยืนยันอีเมลที่ส่งไปตอนสมัคร ใช้ได้ 24 ชม. ครั้งเดียว กดแล้วเข้าสู่ระบบให้อัตโนมัติ |
+| `/` | แอปหลัก (ต้องล็อกอินและยืนยันอีเมลแล้ว ไม่งั้นพาไป `/login`) |
 | `/subscription` | เลือกแพ็กเกจ: ฟรี · ทดลอง 14 วัน · Pro |
-| `/trial/<token>` | ยืนยันเริ่มทดลองใช้ (สมัคร/ล็อกอินในหน้านี้ได้) ลิงก์ใช้ได้ 30 นาที ครั้งเดียว |
+| `/trial/<token>` | ยืนยันเริ่มทดลองใช้ (สมัคร/ล็อกอินในหน้านี้ได้) ลิงก์ใช้ได้ 24 ชม. ครั้งเดียว |
 | `/pay/<token>` | หน้า QR PromptPay ของรายการนั้น QR ใช้ได้ 10 นาที |
 | `/receipt/<token>` | สถานะ/ใบเสร็จหลังกด "ฉันโอนแล้ว" อัปเดตเองเมื่อแอดมินอนุมัติ |
 
@@ -63,8 +65,8 @@ Workers & Pages → โปรเจกต์ → Settings → Build
 1. **Storage & databases → D1 SQL database → Create** ตั้งชื่อ `smarthomework-db`
 2. เปิดฐานข้อมูล → แท็บ **Console** → คัดลอกเนื้อหาไฟล์ `schema.sql` ทั้งหมดไปวาง → **Execute**
 
-> ถ้าเคยรัน `schema.sql` เวอร์ชันก่อน (v1.1) ไปแล้ว และยังไม่มีผู้ใช้จริง ให้รันคำสั่งนี้ใน Console ก่อน แล้วรัน `schema.sql` ใหม่
-> `DROP TABLE IF EXISTS sync_data; DROP TABLE IF EXISTS payments; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS rate_limits; DROP TABLE IF EXISTS users;`
+> ถ้าเคยรัน `schema.sql` เวอร์ชันก่อนหน้า (v1.1 / v1.2) ไปแล้ว และยังไม่มีผู้ใช้จริง ให้รันคำสั่งนี้ใน Console ก่อน แล้วรัน `schema.sql` ใหม่
+> `DROP TABLE IF EXISTS email_tokens; DROP TABLE IF EXISTS trial_links; DROP TABLE IF EXISTS sync_data; DROP TABLE IF EXISTS payments; DROP TABLE IF EXISTS sessions; DROP TABLE IF EXISTS rate_limits; DROP TABLE IF EXISTS users;`
 
 ### 3) ผูกฐานข้อมูลกับเว็บ
 โปรเจกต์ Pages → **Settings → Bindings → Add → D1 database**
@@ -83,11 +85,60 @@ Workers & Pages → โปรเจกต์ → Settings → Build
 | `TRIAL_DAYS` | `14` | วันทดลองใช้ |
 | `PAY_QR_MINUTES` | `10` | อายุ QR (นาที) ไม่ใส่ = 10 |
 
-### 5) Deploy ใหม่
+### 5) ตั้งค่าส่งอีเมลยืนยัน
+
+ผู้ใช้ต้องกดลิงก์ `/verify/<token>` ในอีเมลก่อนจึงจะเข้าแอปได้ เลือกได้ 2 แบบ (ถ้าตั้งทั้งสองแบบ ระบบใช้ Gmail ก่อน)
+ถ้ายังไม่ตั้งแบบไหนเลย หรือใส่ `REQUIRE_EMAIL_VERIFICATION` = `false` ระบบจะ**ข้ามการยืนยันอีเมล** (ยังต้องสมัคร/ล็อกอินก่อนใช้งานเหมือนเดิม)
+
+#### แบบ A: Gmail บอต (ไม่ต้องมีโดเมน) ← แนะนำตอนนี้
+
+ส่งจาก **Smart Homework &lt;smarthomeworkmail@gmail.com&gt;** ผ่าน Gmail API ส่งได้ประมาณหลายร้อยฉบับต่อวันตามโควตาของ Gmail
+
+**ก. สร้างบัญชีบอต**
+1. สมัคร Gmail ใหม่ `smarthomeworkmail@gmail.com` และเปิด **2-Step Verification** ให้บัญชีนี้
+
+**ข. สร้างแอปใน Google Cloud** (ล็อกอินด้วยบัญชีบอต)
+1. ไปที่ console.cloud.google.com → **New Project** ตั้งชื่อ `smart-homework-mail`
+2. **APIs & Services → Library** → ค้นหา **Gmail API** → **Enable**
+3. **APIs & Services → OAuth consent screen** (หรือ Google Auth Platform)
+   - User type: **External**, App name: `Smart Homework`, support email: บัญชีบอต
+   - Scopes: เพิ่ม `https://www.googleapis.com/auth/gmail.send`
+   - **Audience / Publishing status → Publish app → In production** ⚠️ สำคัญมาก ถ้าค้างที่ "Testing" สิทธิ์จะหมดอายุทุก 7 วัน แล้วระบบจะส่งอีเมลไม่ได้
+4. **Credentials → Create credentials → OAuth client ID**
+   - Application type: **Web application**
+   - Authorized redirect URIs: `https://developers.google.com/oauthplayground`
+   - กด Create แล้วคัดลอก **Client ID** และ **Client secret**
+
+**ค. ขอ Refresh token** (ทำครั้งเดียว ผ่านเว็บ ไม่ต้องใช้คำสั่ง)
+1. เปิด developers.google.com/oauthplayground
+2. กดรูปเฟือง ⚙️ มุมขวาบน → ติ๊ก **Use your own OAuth credentials** → วาง Client ID / Client secret
+3. ช่อง "Input your own scopes" ด้านซ้าย พิมพ์ `https://www.googleapis.com/auth/gmail.send` → **Authorize APIs**
+4. ล็อกอินด้วย **smarthomeworkmail@gmail.com** → ถ้าขึ้น "Google hasn't verified this app" กด **Advanced → Go to Smart Homework (unsafe)** (เป็นแอปของคุณเอง) → Allow
+5. กด **Exchange authorization code for tokens** → คัดลอก **Refresh token** (ขึ้นต้นด้วย `1//`)
+
+**ง. ใส่ตัวแปรใน Cloudflare Pages** (Settings → Variables and secrets)
+
+| ชื่อ | ค่า | ชนิด |
+|---|---|---|
+| `GMAIL_USER` | `smarthomeworkmail@gmail.com` | Text |
+| `GMAIL_CLIENT_ID` | `xxxx.apps.googleusercontent.com` | Text |
+| `GMAIL_CLIENT_SECRET` | `GOCSPX-...` | **Secret** |
+| `GMAIL_REFRESH_TOKEN` | `1//...` | **Secret** |
+| `EMAIL_FROM_NAME` | `Smart Homework` (ไม่ใส่ก็ได้) | Text |
+| `APP_URL` | `https://smarthomework.pages.dev` | Text |
+
+ถ้าวันหนึ่งสมัครแล้วขึ้น "ส่งอีเมลไม่สำเร็จ" ส่วนใหญ่เพราะ refresh token หมดอายุ/ถูกยกเลิก (เช่น เปลี่ยนรหัสผ่านบัญชีบอต) ให้ทำข้อ ค. ใหม่แล้วอัปเดต `GMAIL_REFRESH_TOKEN`
+
+#### แบบ B: Resend (เมื่อมีโดเมนของตัวเองแล้ว)
+
+1. resend.com → **Domains → Add Domain** แล้วเพิ่มระเบียน DNS ที่ได้ใน Cloudflare (ตั้ง Proxy เป็น DNS only) จนขึ้น Verified
+2. **API Keys → Create API Key** แล้วใส่ตัวแปร `RESEND_API_KEY` (Secret) และ `EMAIL_FROM` = `Smart Homework <no-reply@โดเมนของคุณ>`
+
+### 6) Deploy ใหม่
 Deployments → Retry deployment (binding และตัวแปรจะมีผลกับ deployment ใหม่เท่านั้น)
 
-### 6) ตรวจสอบ
-- เปิด `https://<โปรเจกต์>.pages.dev/api/health` ต้องได้ `{"ok":true,"db":true,"billing":true}`
+### 7) ตรวจสอบ
+- เปิด `https://<โปรเจกต์>.pages.dev/api/health` ต้องได้ `"db":true`, `"billing":true`, `"email":true`
 - สมัครสมาชิกด้วยอีเมลที่ใส่ใน `ADMIN_EMAILS` → กดปุ่มแพ็กเกจมุมขวาบน → **แอดมิน: ตรวจการโอน**
 - ทดลองซื้อด้วยบัญชีทดสอบ โอนจริง 49.xx บาทเข้าบัญชีตัวเอง แล้วอนุมัติ
 

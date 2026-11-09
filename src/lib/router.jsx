@@ -9,6 +9,9 @@ import { useEffect, useState } from 'react';
  *   /trial/<token>          confirm starting the free trial
  *   /pay/<token>            PromptPay QR for one payment
  *   /receipt/<token>        payment status / receipt (after "I've paid")
+ *   /login, /signup         sign in / sign up (required before using /)
+ *   /verify/<token>         link from the confirmation email
+ *   /privacy                privacy policy (public)
  */
 const listeners = new Set();
 
@@ -40,7 +43,8 @@ export function matchRoute(path) {
   const head = (seg[0] || '').toLowerCase(); // /Trial and /trial both work
   if (seg.length === 0) return { name: 'home' };
   if (head === 'subscription' && seg.length === 1) return { name: 'subscription' };
-  if (['trial', 'pay', 'receipt'].includes(head) && seg.length === 2 && TOKEN.test(seg[1])) {
+  if ((head === 'login' || head === 'signup' || head === 'privacy') && seg.length === 1) return { name: head };
+  if (['trial', 'pay', 'receipt', 'verify'].includes(head) && seg.length === 2 && TOKEN.test(seg[1])) {
     return { name: head, token: seg[1] };
   }
   return { name: 'notfound' };

@@ -1,7 +1,7 @@
 {
   "name": "smart-homework-prioritizer",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.4.0",
   "type": "module",
   "description": "Smart Homework & Study Prioritizer - plan homework, prioritize tasks and avoid burnout.",
   "scripts": {

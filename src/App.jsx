@@ -26,11 +26,36 @@ const TABS = [
   { key: 'week', Icon: CalendarIcon },
 ];
 
+/** Data saved before accounts existed (single shared key) is adopted by the first account that logs in. */
+const legacyCache = new Map();
+function legacy(key, fallback) {
+  if (!legacyCache.has(key)) {
+    let value = null;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw != null) {
+        value = JSON.parse(raw);
+        window.localStorage.removeItem(key);
+      }
+    } catch {
+      value = null;
+    }
+    legacyCache.set(key, value);
+  }
+  return legacyCache.get(key) ?? fallback;
+}
+
 export default function App() {
   const { t, fmt } = useI18n();
   const account = useAccount();
-  const [tasks, setTasks] = useLocalStorage(STORAGE_KEYS.tasks, [], reviveTasks);
-  const [settings, setSettings] = useLocalStorage(STORAGE_KEYS.settings, DEFAULT_SETTINGS, reviveSettings);
+  // Each account keeps its own tasks in this browser (App is re-mounted per user, see main.jsx).
+  const owner = account.user?.id || 'local';
+  const [tasks, setTasks] = useLocalStorage(`${STORAGE_KEYS.tasks}:${owner}`, legacy(STORAGE_KEYS.tasks, []), reviveTasks);
+  const [settings, setSettings] = useLocalStorage(
+    `${STORAGE_KEYS.settings}:${owner}`,
+    legacy(STORAGE_KEYS.settings, DEFAULT_SETTINGS),
+    reviveSettings,
+  );
   const [tab, setTab] = useState('focus');
   // Which sheet (modal) is open: form | settings | account | checkout | admin
   const [sheet, setSheet] = useState(null);
