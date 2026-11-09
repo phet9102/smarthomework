@@ -444,6 +444,7 @@ export default {
     not_found: 'Not found.',
     pro_required: 'This feature is for Pro members.',
     billing_not_configured: 'Payments are not set up yet (PROMPTPAY_ID missing).',
+    db_schema_outdated: 'The database still has an old schema. The admin needs to run the latest schema.sql in D1.',
     db_not_configured: 'Database not connected (D1 binding named DB).',
     busy: 'Too many pending payments right now. Try again later.',
     payload_too_large: 'Data is too large.',

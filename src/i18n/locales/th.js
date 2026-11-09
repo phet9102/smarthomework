@@ -444,6 +444,7 @@ export default {
     not_found: 'ไม่พบรายการ',
     pro_required: 'ฟีเจอร์นี้สำหรับสมาชิก Pro',
     billing_not_configured: 'ระบบชำระเงินยังไม่ได้ตั้งค่า (ยังไม่ได้ใส่ PROMPTPAY_ID)',
+    db_schema_outdated: 'ฐานข้อมูลยังเป็นเวอร์ชันเก่า ผู้ดูแลต้องรัน schema.sql ตัวล่าสุดใน D1',
     db_not_configured: 'ยังไม่ได้เชื่อมฐานข้อมูล (D1 binding ชื่อ DB)',
     busy: 'มีรายการรอชำระเยอะเกินไป ลองใหม่ภายหลัง',
     payload_too_large: 'ข้อมูลใหญ่เกินไป',

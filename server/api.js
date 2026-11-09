@@ -23,7 +23,7 @@
  * amount against the K PLUS incoming-transfer notification and approves it.
  */
 import { promptPayPayload, isValidPromptPayId, maskPromptPayId } from './promptpay.js';
-import { emailConfigured, sendEmail, verificationEmail } from './email.js';
+import { emailConfigured, emailProvider, sendEmail, verificationEmail } from './email.js';
 import { hashPassword, randomHex, randomId, randomToken, sha256Hex, verifyPassword } from './security.js';
 
 const MS_DAY = 24 * 60 * 60 * 1000;
@@ -647,6 +647,31 @@ async function confirmTrial(request, env, cfg, token) {
   return json(await meBody(env, { ...user, trial_ends_at: trialEnds }, cfg));
 }
 
+/** Checks that every table/column this version needs exists. Returns 'ok' or what is missing. */
+async function checkSchema(env) {
+  const needs = {
+    users: ['email', 'trial_ends_at', 'paid_until', 'email_verified_at'],
+    sessions: ['token_hash'],
+    email_tokens: ['token_hash', 'next_path'],
+    trial_links: ['token_hash'],
+    payments: ['amount_satang', 'expires_at'],
+    sync_data: ['user_id'],
+    rate_limits: ['key'],
+  };
+  const missing = [];
+  for (const [table, cols] of Object.entries(needs)) {
+    try {
+      const { results } = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
+      const have = new Set((results || []).map((r) => r.name));
+      if (have.size === 0) missing.push(table);
+      else for (const c of cols) if (!have.has(c)) missing.push(`${table}.${c}`);
+    } catch {
+      missing.push(table);
+    }
+  }
+  return missing.length ? `missing: ${missing.join(', ')}` : 'ok';
+}
+
 // ---------- router ----------
 
 export async function handleApi(request, env) {
@@ -660,8 +685,10 @@ export async function handleApi(request, env) {
       return json({
         ok: true,
         db: Boolean(env.DB),
+        schema: env.DB ? await checkSchema(env) : 'no_db',
         billing: billingConfigured(cfg),
         email: emailConfigured(env),
+        emailProvider: emailProvider(env),
         emailVerification: verificationRequired(env),
       });
     }
@@ -708,7 +735,11 @@ export async function handleApi(request, env) {
     throw new HttpError(404, 'not_found');
   } catch (err) {
     if (err instanceof HttpError) return json({ error: err.code }, err.status);
-    console.error('API error', err);
+    console.error('API error', err?.message || err);
+    // A missing table/column means the D1 database still has an older schema.sql.
+    if (/no such (table|column)|has no column/i.test(String(err?.message || ''))) {
+      return json({ error: 'db_schema_outdated', detail: String(err.message).slice(0, 200) }, 500);
+    }
     return json({ error: 'generic' }, 500);
   }
 }
